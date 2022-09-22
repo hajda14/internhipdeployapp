@@ -1,0 +1,24 @@
+#!/bin/bash
+APP_NAME="internship"
+OPT_DIR="/opt/${APP_NAME}"
+ETC_DIR="/etc/${APP_NAME}"
+DOMAIN="${APP_NAME}.creapy.cz"
+
+
+echo "creating backup"
+tar -zcvf "/tmp/${APP_NAME}-$(date '+%Y-%m-%d').tar.gz" /opt/${APP_NAME}/ 
+
+echo "removing old files"
+# find /opt/${APP_NAME}/ -not -name 'app.db' -not -name 'settings.json' -delete
+
+echo "stoping and disabling old services"
+systemctl daemon-reload
+systemctl stop ${APP_NAME}-backend
+systemctl disable ${APP_NAME}-backend
+
+echo "removing old services"
+rm -rf /lib/systemd/system/${APP_NAME}-*.service
+
+
+echo "reloading services state"
+systemctl daemon-reload

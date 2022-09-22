@@ -1,0 +1,41 @@
+#!/bin/bash
+APP_NAME="internship"
+OPT_DIR="/opt/${APP_NAME}"
+ETC_DIR="/etc/${APP_NAME}"
+DOMAIN="${APP_NAME}.creapy.cz"
+
+mkdir -p ${OPT_DIR}
+cd ${OPT_DIR}
+chmod +x ./install.sh
+./install.sh
+
+echo "changing permisssion of ${APP_NAME} files"
+chmod -R 775 ${ETC_DIR}
+chmod -R 775 ${OPT_DIR}
+
+echo "setting nginx"
+
+sed -i "s/<domain>/${DOMAIN}/g" /etc/nginx/sites-enabled/${APP_NAME}.conf
+echo "enabling services"
+if [[ -x /run/systemd/system ]];then 
+    systemctl daemon-reload
+    systemctl enable ${APP_NAME}-backend
+else
+    echo "systemd is not part of this system"
+fi
+
+echo "starting nginx"
+nginx -s reload
+
+echo "migrating to new database scheme"
+# FLASK_APP=FLASK_APP=${OPT_DIR}/app.py python3 -m pipenv run python -m flask db init
+# FLASK_APP=FLASK_APP=${OPT_DIR}/app.py python3 -m pipenv run python -m flask db migrate
+# FLASK_APP=FLASK_APP=${OPT_DIR}/app.py python3 -m pipenv run python -m flask db upgrade
+
+
+echo "starting ${APP_NAME} services"
+if [[ -x /run/systemd/system ]];then 
+    systemctl start ${APP_NAME}-backend
+else
+    echo "systemd is not part of this system"
+fi

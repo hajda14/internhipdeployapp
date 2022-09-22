@@ -1,0 +1,163 @@
+version: 2.1
+
+general:
+  branches:
+    only:
+     - main # list of branches to build
+
+orbs:
+  python: circleci/python@2.0.3
+  go: circleci/go@1.5.0
+  github-release: h-matsuo/github-release@0.1.3
+  node: circleci/node@5.0.2
+
+executors:
+  github:
+    docker:
+      - image: cibuilds/github:0.10
+    working_directory: /tmp/workspace
+
+jobs: 
+  build-and-test:
+    docker:
+      - image: cimg/python:3.10
+    steps:
+      - checkout
+      - python/install-packages:
+          args: pytest
+          pkg-manager: pipenv
+      - run:
+          command: mkdir test-results
+          name: Creating report folder
+      - run:
+          command: sudo apt-get update
+          name: update repos
+      - run:
+          command: pipenv install
+          name: install project dependencies
+      - run:
+          command: pipenv run pytest --junitxml=test-results/test_api.xml backend/app/tests/
+          name: Test Rest
+      - store_test_results: 
+          path: test-results
+
+
+  build_frontend:
+    executor: node/default
+    steps:
+      - checkout
+      - node/install:
+          node-version: '16.13'
+      - run:
+          command: |
+            ls
+            cd frontend
+          name: entering frontend folder
+      - run: cd frontend && npm install
+      - run: cd frontend && npm run CIbuild
+      - persist_to_workspace:
+          root: /home/circleci/project/
+          paths:
+            - frontend/build
+
+
+  release_to_github:
+    executor: github
+    steps:
+      - checkout
+      - run:
+          command: |
+            apk add python3 py3-pip dpkg
+          name: install python 
+      - run:
+          command: |
+            mkdir /tmp/artifacts
+            mkdir /tmp/release
+          name: Creating artifacts and release folder
+      - attach_workspace:
+          at: "."
+      - run:
+          command: sh dpkg_create.sh && tar -zcvf /tmp/artifacts/release.tar.gz .
+          name: build
+      - run:
+          command: |
+            VERSION=$(cat version)
+            cp /tmp/internship_${VERSION}_amd64.deb /tmp/artifacts/internship_${VERSION}_amd64.deb
+          name: move deb to artifacts
+      - run:
+          command: |
+            VERSION=$(cat version)
+            cp /tmp/internship_${VERSION}_amd64.deb /tmp/release/internship_${VERSION}_amd64.deb
+          name: move deb to release
+
+      - run:
+          name: "Publish Release on GitHub"
+          command: |
+            VERSION=$(cat version)
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${VERSION} /tmp/release/internship_${VERSION}_amd64.deb
+
+      - store_artifacts:
+           path: /tmp/artifacts
+
+
+  release_to_repo:
+    executor: python/default
+    steps:
+      - checkout
+      - run:
+          command: |
+            mkdir /tmp/artifacts
+            mkdir /tmp/release
+          name: Creating artifacts and release folder
+      - attach_workspace:
+          at:  "."
+      - run:
+          command: sh dpkg_create.sh && tar -zcvf /tmp/artifacts/release.tar.gz .
+          name: build
+      - run:
+          command: |
+            VERSION=$(cat version)
+            cp /tmp/internship_${VERSION}_amd64.deb /tmp/artifacts/internship_${VERSION}_amd64.deb
+          name: move deb to artifacts
+      - run:
+          command: |
+            VERSION=$(cat version)
+            cp /tmp/internship_${VERSION}_amd64.deb /tmp/release/internship_${VERSION}_amd64.deb
+          name: move deb to release
+      - add_ssh_keys:
+          fingerprints:
+            - "52:f6:d8:4f:6b:d7:dd:07:16:49:91:c4:6b:03:a2:2c"
+      - run:
+          name: "Publish to repo"
+          command: |
+            VERSION=$(cat version)
+            scp  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -r /tmp/release/internship_${VERSION}_amd64.deb creapy@forpsi.creapy.cz:/home/creapy/repo/internship
+            ssh  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null creapy@forpsi.creapy.cz "aptly repo create -distribution=default -component=main internship || true"
+            ssh  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null creapy@forpsi.creapy.cz "aptly repo remove internship 'Name (% internship*)'"
+
+            ssh  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null creapy@forpsi.creapy.cz "aptly repo add internship /home/creapy/repo/internship"
+
+
+            ssh  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null creapy@forpsi.creapy.cz "aptly publish drop default || true"
+            ssh  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null creapy@forpsi.creapy.cz "aptly snapshot drop internship || true"
+            ssh  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null creapy@forpsi.creapy.cz "aptly snapshot create internship from repo internship"
+
+            ssh  -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null creapy@forpsi.creapy.cz "aptly publish snapshot -batch -passphrase=\"$GPG_PASSPHRASE\" internship"
+
+
+workflows:
+  main:
+    jobs:
+      - build-and-test
+      - build_frontend
+      - hold: 
+          type: approval #
+          requires:
+            - build-and-test
+            - build_frontend
+      - release_to_github:
+          requires:
+            - hold
+      - release_to_repo:
+          requires:
+            - hold
