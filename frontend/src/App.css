@@ -1,0 +1,48 @@
+.grid {
+    display: grid;
+    grid-template-columns: repeat (3, 1fr);
+    grid-template-rows: 5% 800px auto;
+    grid-gap: 1em;
+}
+
+.grid>* {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+header,
+nav,
+article,
+aside,
+footer {
+    background: rgb(236, 235, 235);
+    padding: 1em;
+}
+
+header,
+footer {
+    grid-column: 1 / 4;
+}
+
+article {
+    min-width: 1em;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    height: "150rem";
+}
+
+.product--card {
+    border: 2px outset rgb(110, 105, 105);
+    margin: 5px;
+    margin-left: 100px;
+}
+
+.product--card-image {
+    height: 200px;
+}
+
+.product--card-info {
+    display: grid;
+}

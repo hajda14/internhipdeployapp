@@ -1,0 +1,25 @@
+[{
+        "name": "phone samsung",
+        "price": 20000
+    },
+    {
+        "name": "phone iphone",
+        "price": 21000
+    },
+    {
+        "name": "phone motorola",
+        "price": 23000
+    },
+    {
+        "name": "phone nokia",
+        "price": 24000
+    },
+    {
+        "name": "phone bosh",
+        "price": 25000
+    },
+    {
+        "name": "phone sony ericsson",
+        "price": 26000
+    }
+]
